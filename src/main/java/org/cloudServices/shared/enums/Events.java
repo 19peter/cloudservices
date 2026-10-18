@@ -1,0 +1,14 @@
+package org.cloudServices.shared.enums;
+
+public enum Events {
+    RUNTIME_CREATED,
+
+    //COMPUTE UNIT EVENTS
+    COMPUTE_UNIT_CREATED,
+    COMPUTE_UNIT_RESERVED,
+    COMPUTE_UNIT_RUNNING,
+    COMPUTE_UNIT_RELEASED,
+    COMPUTE_UNIT_TERMINATED,
+    COMPUTE_UNIT_KILLED,
+
+}
