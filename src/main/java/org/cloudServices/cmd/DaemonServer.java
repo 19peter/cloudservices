@@ -22,6 +22,7 @@ public class DaemonServer {
                while (true) {
                    try {
                        Socket clientSocket = serverSocket.accept();
+                       handleClient(clientSocket);
                    } catch (IOException e) {
                        throw new RuntimeException(e);
                    }
@@ -39,10 +40,17 @@ public class DaemonServer {
                     PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
             )
             {
-                String inputLine = in.readLine();
-                if (inputLine != null && !inputLine.trim().isEmpty()) {
-                    String response = CommandDispatcher.dispatch(inputLine);
-                    out.println(response);
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    inputLine = inputLine.trim();
+                    if (inputLine.equalsIgnoreCase("exit") || inputLine.equalsIgnoreCase("quit")) {
+                        out.println("Goodbye!");
+                        break;
+                    }
+                    if (!inputLine.isEmpty()) {
+                        String response = CommandDispatcher.dispatch(inputLine);
+                        out.println(response);
+                    }
                 }
             } catch (Exception e) {
                 logger.error("Error communicating with client", e);
