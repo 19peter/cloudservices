@@ -11,11 +11,13 @@ import org.cloudServices.shared.interfaces.GatewayServerIntegration;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 
 public class ComputeUnit implements GatewayServerIntegration {
     private final UUID id;
     private final LocalDateTime createdAt;
     private final String name;
+    private final Semaphore capacity = new Semaphore(4);
     private Workload workload;
     private RuntimeInterface runtimeInterface;
     private ComputeUnitState state;
@@ -112,7 +114,15 @@ public class ComputeUnit implements GatewayServerIntegration {
     }
 
     @Override
-    public void executeRunnableTask(Runnable task) {
+    public boolean acquireSlot() {
+        if (this.state != ComputeUnitState.RUNNING) {
+            return false;
+        }
+        return capacity.tryAcquire();
+    }
 
+    @Override
+    public void releaseSlot() {
+        capacity.release();
     }
 }
