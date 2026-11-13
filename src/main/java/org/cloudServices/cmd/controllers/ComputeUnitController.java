@@ -7,290 +7,355 @@ import org.cloudServices.infra.computeUnit.ComputeUnitCapacity;
 import org.cloudServices.infra.runtimes.JSRuntime.JSFileWorkload;
 import org.cloudServices.infra.runtimes.JarRuntime.JarWorkload;
 import org.cloudServices.infra.runtimes.Workload;
-import org.cloudServices.shared.annotations.CLDAction;
-import org.cloudServices.shared.annotations.CLDCommand;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
+import picocli.CommandLine.Model.CommandSpec;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
-/**
- * Controller for managing ComputeUnit instances via the CLI command dispatcher.
- * Handles commands starting with 'cld cu <action> [args]'.
- */
-@CLDCommand("cu")
-public class ComputeUnitController {
+@Command(
+        name = "cu",
+        description = "Create and manage compute units.",
+        subcommands = {
+                ComputeUnitController.CreateCommand.class,
+                ComputeUnitController.AssignCommand.class,
+                ComputeUnitController.RunCommand.class,
+                ComputeUnitController.StopCommand.class,
+                ComputeUnitController.ReleaseCommand.class,
+                ComputeUnitController.KillCommand.class,
+                ComputeUnitController.StatusCommand.class,
+                ComputeUnitController.ListCommand.class
+        },
+        mixinStandardHelpOptions = true
+)
+public class ComputeUnitController implements Runnable {
+    @Spec
+    private CommandSpec spec;
 
-    @CLDAction("create")
-    public String create(String[] args) {
-        try {
+    @Override
+    public void run() {
+        spec.commandLine().usage(spec.commandLine().getOut());
+    }
+
+    @Command(
+            name = "create",
+            description = "Create a compute unit, optionally with a workload.",
+            mixinStandardHelpOptions = true
+    )
+    public static class CreateCommand implements Runnable {
+        @Option(names = "--name", paramLabel = "NAME", description = "Name for the compute unit.")
+        private String name;
+
+        @Option(
+                names = "--capacity",
+                paramLabel = "CAPACITY",
+                description = "Capacity: MICRO, MEDIUM, LARGE, or ULTRA."
+        )
+        private ComputeUnitCapacity capacity;
+
+        @Parameters(arity = "0..*", paramLabel = "ARGS", description = "Optional name, workload, and workload arguments.")
+        private List<String> args = new ArrayList<>();
+
+        @Spec
+        private CommandSpec spec;
+
+        @Override
+        public void run() {
+            try {
+                respond(spec, create());
+            } catch (Exception e) {
+                respond(spec, "Error creating compute unit: " + e.getMessage());
+            }
+        }
+
+        private String create() {
+            String unitName = name;
             Workload workload = null;
-            String name = null;
-            ComputeUnitCapacity capacity = null;
-            boolean capacitySpecified = false;
-            List<String> createArgs = new ArrayList<>();
-
-            for (int i = 0; i < Math.min(args.length, 3); i++) {
-                createArgs.add(args[i]);
-            }
-
-            int argIndex = 3;
-            while (argIndex < args.length && args[argIndex].startsWith("--capacity")) {
-                String capacityValue;
-                if (args[argIndex].equals("--capacity")) {
-                    if (argIndex + 1 >= args.length) {
-                        argIndex++;
-                        break;
-                    }
-                    capacityValue = args[argIndex + 1];
-                    argIndex += 2;
-                } else if (args[argIndex].startsWith("--capacity=")) {
-                    capacityValue = args[argIndex].substring("--capacity=".length());
-                    argIndex++;
+            if (!args.isEmpty()) {
+                if (name != null || isWorkloadSpec(args.get(0))) {
+                    workload = parseWorkload(args, 0);
                 } else {
-                    throw new IllegalArgumentException("Invalid capacity option: " + args[argIndex]);
-                }
-
-                if (capacitySpecified) {
-                    throw new IllegalArgumentException("--capacity may only be specified once");
-                }
-                capacity = parseCapacity(capacityValue);
-                capacitySpecified = true;
-            }
-            while (argIndex < args.length) {
-                createArgs.add(args[argIndex++]);
-            }
-            String[] positionalArgs = createArgs.toArray(new String[0]);
-
-            if (positionalArgs.length >= 4) {
-                String firstArg = positionalArgs[3];
-                // Check if first arg is a workload spec (e.g. "jar", "js", or a file path)
-                if (firstArg.equalsIgnoreCase("jar") || firstArg.equalsIgnoreCase("js")
-                        || firstArg.endsWith(".jar") || firstArg.endsWith(".js")) {
-                    workload = parseWorkload(positionalArgs, 3);
-                } else {
-                    // Otherwise treat it as the compute unit name
-                    name = firstArg;
-                    if (positionalArgs.length >= 5) {
-                        workload = parseWorkload(positionalArgs, 4);
+                    unitName = args.get(0);
+                    if (args.size() > 1) {
+                        workload = parseWorkload(args, 1);
                     }
                 }
             }
 
             ComputeUnitBuilder builder = new ComputeUnitBuilder()
                     .workload(workload)
-                    .name(name);
+                    .name(unitName);
             if (capacity != null) {
                 builder.capacity(capacity);
             }
+
             ComputeUnit cu = builder.build();
             return "ComputeUnit created successfully. ID: " + cu.getId()
-                    + (name != null ? " [Name: " + name + "]" : "")
+                    + (unitName != null ? " [Name: " + unitName + "]" : "")
                     + " [State: " + cu.getState() + "]";
-        } catch (Exception e) {
-            return "Error creating compute unit: " + e.getMessage();
         }
     }
 
-    private ComputeUnitCapacity parseCapacity(String value) {
-        try {
-            return ComputeUnitCapacity.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(
-                    "Invalid capacity '" + value + "'. Choose MICRO, MEDIUM, LARGE, or ULTRA.");
+    @Command(
+            name = "assign",
+            description = "Assign a workload to an available compute unit.",
+            mixinStandardHelpOptions = true
+    )
+    public static class AssignCommand implements Runnable {
+        @Parameters(arity = "1..*", paramLabel = "ARGS", description = "<unitId> [jar|js] <filePath> [args...]")
+        private List<String> args = new ArrayList<>();
+
+        @Spec
+        private CommandSpec spec;
+
+        @Override
+        public void run() {
+            if (args.size() < 2) {
+                respond(spec, "Usage: cld cu assign <unitId> [jar|js] <filePath> [args...]");
+                return;
+            }
+
+            String unitId = args.get(0);
+            ComputeUnit cu = findUnit(unitId);
+            if (cu == null) {
+                respond(spec, "Error: ComputeUnit not found with ID: " + unitId);
+                return;
+            }
+
+            try {
+                Workload workload = parseWorkload(args, 1);
+                cu.assignWorkload(workload);
+                respond(spec, "Workload assigned to ComputeUnit " + unitId + ". State: " + cu.getState());
+            } catch (Exception e) {
+                respond(spec, "Error assigning workload: " + e.getMessage());
+            }
         }
     }
 
-    @CLDAction("assign")
-    public String assign(String[] args) {
-        if (args.length < 5) {
-            return "Usage: cld cu assign <unitId> [jar|js] <filePath> [args...]";
-        }
+    @Command(
+            name = "run",
+            aliases = "execute",
+            description = "Execute the workload assigned to a compute unit.",
+            mixinStandardHelpOptions = true
+    )
+    public static class RunCommand implements Runnable {
+        @Parameters(index = "0", paramLabel = "unitId")
+        private String unitId;
 
-        String unitId = args[3];
-        ComputeUnit cu = Memdb.getInstance(unitId);
-        if (cu == null) {
-            return "Error: ComputeUnit not found with ID: " + unitId;
-        }
+        @Spec
+        private CommandSpec spec;
 
-        try {
-            Workload workload = parseWorkload(args, 4);
-            cu.assignWorkload(workload);
-            return "Workload assigned to ComputeUnit " + unitId + ". State: " + cu.getState();
-        } catch (Exception e) {
-            return "Error assigning workload: " + e.getMessage();
-        }
-    }
+        @Override
+        public void run() {
+            ComputeUnit cu = findUnit(unitId);
+            if (cu == null) {
+                respond(spec, "Error: ComputeUnit not found with ID: " + unitId);
+                return;
+            }
 
-    @CLDAction("run")
-    public String run(String[] args) {
-        if (args.length < 4) {
-            return "Usage: cld cu run <unitId>";
-        }
-
-        String unitId = args[3];
-        ComputeUnit cu = Memdb.getInstance(unitId);
-        if (cu == null) {
-            return "Error: ComputeUnit not found with ID: " + unitId;
-        }
-
-        try {
-            String pid = cu.executeWorkload();
-            return "ComputeUnit " + unitId + " running with PID: " + pid + " [State: " + cu.getState() + "]";
-        } catch (Exception e) {
-            return "Error executing compute unit: " + e.getMessage();
+            try {
+                String pid = cu.executeWorkload();
+                respond(spec, "ComputeUnit " + unitId + " running with PID: " + pid + " [State: " + cu.getState() + "]");
+            } catch (Exception e) {
+                respond(spec, "Error executing compute unit: " + e.getMessage());
+            }
         }
     }
 
-    @CLDAction("execute")
-    public String execute(String[] args) {
-        return run(args);
-    }
+    @Command(
+            name = "stop",
+            aliases = "terminate",
+            description = "Stop a compute unit's active workload.",
+            mixinStandardHelpOptions = true
+    )
+    public static class StopCommand implements Runnable {
+        @Parameters(index = "0", paramLabel = "unitId")
+        private String unitId;
 
-    @CLDAction("stop")
-    public String stop(String[] args) {
-        if (args.length < 4) {
-            return "Usage: cld cu stop <unitId>";
-        }
+        @Spec
+        private CommandSpec spec;
 
-        String unitId = args[3];
-        ComputeUnit cu = Memdb.getInstance(unitId);
-        if (cu == null) {
-            return "Error: ComputeUnit not found with ID: " + unitId;
-        }
+        @Override
+        public void run() {
+            ComputeUnit cu = findUnit(unitId);
+            if (cu == null) {
+                respond(spec, "Error: ComputeUnit not found with ID: " + unitId);
+                return;
+            }
 
-        try {
-            cu.terminateWorkload();
-            return "ComputeUnit " + unitId + " workload stopped. [State: " + cu.getState() + "]";
-        } catch (Exception e) {
-            return "Error stopping compute unit: " + e.getMessage();
-        }
-    }
-
-    @CLDAction("terminate")
-    public String terminate(String[] args) {
-        return stop(args);
-    }
-
-    @CLDAction("release")
-    public String release(String[] args) {
-        if (args.length < 4) {
-            return "Usage: cld cu release <unitId>";
-        }
-
-        String unitId = args[3];
-        ComputeUnit cu = Memdb.getInstance(unitId);
-        if (cu == null) {
-            return "Error: ComputeUnit not found with ID: " + unitId;
-        }
-
-        try {
-            cu.releaseWorkload();
-            return "ComputeUnit " + unitId + " workload released. [State: " + cu.getState() + "]";
-        } catch (Exception e) {
-            return "Error releasing compute unit: " + e.getMessage();
+            try {
+                cu.terminateWorkload();
+                respond(spec, "ComputeUnit " + unitId + " workload stopped. [State: " + cu.getState() + "]");
+            } catch (Exception e) {
+                respond(spec, "Error stopping compute unit: " + e.getMessage());
+            }
         }
     }
 
-    @CLDAction("kill")
-    public String kill(String[] args) {
-        if (args.length < 4) {
-            return "Usage: cld cu kill <unitId>";
-        }
+    @Command(
+            name = "release",
+            description = "Release a compute unit's assigned workload.",
+            mixinStandardHelpOptions = true
+    )
+    public static class ReleaseCommand implements Runnable {
+        @Parameters(index = "0", paramLabel = "unitId")
+        private String unitId;
 
-        String unitId = args[3];
-        ComputeUnit cu = Memdb.getInstance(unitId);
-        if (cu == null) {
-            return "Error: ComputeUnit not found with ID: " + unitId;
-        }
+        @Spec
+        private CommandSpec spec;
 
-        try {
-            cu.killInstance();
-            return "ComputeUnit " + unitId + " killed and removed from registry.";
-        } catch (Exception e) {
-            return "Error killing compute unit: " + e.getMessage();
+        @Override
+        public void run() {
+            ComputeUnit cu = findUnit(unitId);
+            if (cu == null) {
+                respond(spec, "Error: ComputeUnit not found with ID: " + unitId);
+                return;
+            }
+
+            try {
+                cu.releaseWorkload();
+                respond(spec, "ComputeUnit " + unitId + " workload released. [State: " + cu.getState() + "]");
+            } catch (Exception e) {
+                respond(spec, "Error releasing compute unit: " + e.getMessage());
+            }
         }
     }
 
-    @CLDAction("status")
-    public String status(String[] args) {
-        if (args.length < 4) {
-            return "Usage: cld cu status <unitId>";
-        }
+    @Command(
+            name = "kill",
+            description = "Terminate and remove a compute unit.",
+            mixinStandardHelpOptions = true
+    )
+    public static class KillCommand implements Runnable {
+        @Parameters(index = "0", paramLabel = "unitId")
+        private String unitId;
 
-        String unitId = args[3];
-        ComputeUnit cu = Memdb.getInstance(unitId);
-        if (cu == null) {
-            return "Error: ComputeUnit not found with ID: " + unitId;
-        }
+        @Spec
+        private CommandSpec spec;
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("ComputeUnit: ").append(cu.getId()).append("\n");
-        sb.append("  State:      ").append(cu.getState()).append("\n");
-        sb.append("  PID:        ").append(cu.getPid() != null ? cu.getPid() : "N/A").append("\n");
-        sb.append("  Created:    ").append(cu.getCreatedAt()).append("\n");
-        sb.append("  Workload:   ").append(describeWorkload(cu.getWorkload()));
-        return sb.toString();
+        @Override
+        public void run() {
+            ComputeUnit cu = findUnit(unitId);
+            if (cu == null) {
+                respond(spec, "Error: ComputeUnit not found with ID: " + unitId);
+                return;
+            }
+
+            try {
+                cu.killInstance();
+                respond(spec, "ComputeUnit " + unitId + " killed and removed from registry.");
+            } catch (Exception e) {
+                respond(spec, "Error killing compute unit: " + e.getMessage());
+            }
+        }
     }
 
-    @CLDAction("list")
-    public String list(String[] args) {
-        Map<String, ComputeUnit> allUnits = Memdb.getAll();
-        if (allUnits.isEmpty()) {
-            return "No compute units registered.";
-        }
+    @Command(
+            name = "status",
+            description = "Display a compute unit's state and workload.",
+            mixinStandardHelpOptions = true
+    )
+    public static class StatusCommand implements Runnable {
+        @Parameters(index = "0", paramLabel = "unitId")
+        private String unitId;
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("Active Compute Units (").append(allUnits.size()).append("):\n");
-        for (ComputeUnit cu : allUnits.values()) {
-            sb.append(String.format("  [%s] State: %-10s PID: %-8s Workload: %s\n",
-                    cu.getId(),
-                    cu.getState(),
-                    cu.getPid() != null ? cu.getPid() : "N/A",
-                    describeWorkload(cu.getWorkload())));
+        @Spec
+        private CommandSpec spec;
+
+        @Override
+        public void run() {
+            ComputeUnit cu = findUnit(unitId);
+            if (cu == null) {
+                respond(spec, "Error: ComputeUnit not found with ID: " + unitId);
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("ComputeUnit: ").append(cu.getId()).append("\n");
+            sb.append("  State:      ").append(cu.getState()).append("\n");
+            sb.append("  PID:        ").append(cu.getPid() != null ? cu.getPid() : "N/A").append("\n");
+            sb.append("  Created:    ").append(cu.getCreatedAt()).append("\n");
+            sb.append("  Workload:   ").append(describeWorkload(cu.getWorkload()));
+            respond(spec, sb.toString());
         }
-        return sb.toString().stripTrailing();
     }
 
-    private Workload parseWorkload(String[] args, int startIndex) {
-        if (args.length <= startIndex) {
+    @Command(
+            name = "list",
+            description = "List all active compute units.",
+            mixinStandardHelpOptions = true
+    )
+    public static class ListCommand implements Runnable {
+        @Spec
+        private CommandSpec spec;
+
+        @Override
+        public void run() {
+            Map<String, ComputeUnit> allUnits = Memdb.getAll();
+            if (allUnits.isEmpty()) {
+                respond(spec, "No compute units registered.");
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("Active Compute Units (").append(allUnits.size()).append("):\n");
+            for (ComputeUnit cu : allUnits.values()) {
+                sb.append(String.format("  [%s] State: %-10s PID: %-8s Workload: %s\n",
+                        cu.getId(),
+                        cu.getState(),
+                        cu.getPid() != null ? cu.getPid() : "N/A",
+                        describeWorkload(cu.getWorkload())));
+            }
+            respond(spec, sb.toString().stripTrailing());
+        }
+    }
+
+    private static ComputeUnit findUnit(String unitId) {
+        return Memdb.getInstance(unitId);
+    }
+
+    private static Workload parseWorkload(List<String> args, int startIndex) {
+        if (args.size() <= startIndex) {
             return null;
         }
 
-        String typeOrPath = args[startIndex];
-
+        String typeOrPath = args.get(startIndex);
         if (typeOrPath.equalsIgnoreCase("jar")) {
-            if (args.length <= startIndex + 1) {
+            if (args.size() <= startIndex + 1) {
                 throw new IllegalArgumentException("Missing jar path after 'jar'");
             }
-            String jarPath = args[startIndex + 1];
-            List<String> programArgs = new ArrayList<>();
-            for (int i = startIndex + 2; i < args.length; i++) {
-                programArgs.add(args[i]);
-            }
+            String jarPath = args.get(startIndex + 1);
+            List<String> programArgs = new ArrayList<>(args.subList(startIndex + 2, args.size()));
             return new JarWorkload(jarPath, programArgs, List.of(), Map.of());
         }
 
         if (typeOrPath.equalsIgnoreCase("js")) {
-            if (args.length <= startIndex + 1) {
+            if (args.size() <= startIndex + 1) {
                 throw new IllegalArgumentException("Missing file path after 'js'");
             }
-            return new JSFileWorkload(args[startIndex + 1]);
+            return new JSFileWorkload(args.get(startIndex + 1));
         }
 
         if (typeOrPath.endsWith(".js")) {
             return new JSFileWorkload(typeOrPath);
         }
 
-        List<String> programArgs = new ArrayList<>();
-        for (int i = startIndex + 1; i < args.length; i++) {
-            programArgs.add(args[i]);
-        }
+        List<String> programArgs = new ArrayList<>(args.subList(startIndex + 1, args.size()));
         return new JarWorkload(typeOrPath, programArgs, List.of(), Map.of());
     }
 
-    private String describeWorkload(Workload workload) {
+    private static boolean isWorkloadSpec(String value) {
+        return value.equalsIgnoreCase("jar")
+                || value.equalsIgnoreCase("js")
+                || value.endsWith(".jar")
+                || value.endsWith(".js");
+    }
+
+    private static String describeWorkload(Workload workload) {
         if (workload == null) {
             return "None";
         }
@@ -301,5 +366,9 @@ public class ComputeUnitController {
             return "JS: " + js.filePath();
         }
         return workload.getClass().getSimpleName();
+    }
+
+    private static void respond(CommandSpec spec, String message) {
+        spec.commandLine().getOut().println(message);
     }
 }

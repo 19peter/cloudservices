@@ -9,7 +9,6 @@ public class Main {
     public static void main(String[] args) {
         Memdb.init();
         Dns.init();
-        CommandDispatcher.init();
         DaemonServer.start();
     }
 }

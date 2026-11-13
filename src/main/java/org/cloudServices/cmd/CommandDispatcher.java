@@ -1,85 +1,117 @@
 package org.cloudServices.cmd;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.cloudServices.shared.annotations.CLDAction;
-import org.cloudServices.shared.annotations.CLDCommand;
-import org.reflections.Reflections;
+import org.cloudServices.cmd.controllers.ComputeUnitController;
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Spec;
 
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class CommandDispatcher {
-    private static final Logger logger = LogManager.getLogger(CommandDispatcher.class);
-    private static final Map<String, Map<String, CommandMethod>> registry = new HashMap<>();
 
-    static class CommandMethod {
-        Object instance;
-        Method method;
+    @Command(
+            name = "cld",
+            description = "Manage cloud service compute units.",
+            subcommands = ComputeUnitController.class,
+            mixinStandardHelpOptions = true
+    )
+    static class RootCommand implements Runnable {
+        @Spec
+        private CommandSpec spec;
 
-        public CommandMethod(Object instance, Method method) {
-            this.instance = instance;
-            this.method = method;
-        }
-    }
-
-    public static void init() {
-        Reflections reflections = new Reflections("org.cloudServices");
-        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(CLDCommand.class);
-
-        for (Class<?> clazz : classes) {
-            try {
-                CLDCommand cldCommand = clazz.getAnnotation(CLDCommand.class);
-                String commandName = cldCommand.value().toLowerCase();
-
-                Object controllerInstance = clazz.getDeclaredConstructor().newInstance();
-                Map<String, CommandMethod> actionMap = registry.computeIfAbsent(commandName, k -> new HashMap<>());
-
-                for (Method method : clazz.getDeclaredMethods()) {
-                    CLDAction actionAnnotation = method.getAnnotation(CLDAction.class);
-                    if (actionAnnotation == null) {
-                        continue;
-                    }
-                    String actionName = actionAnnotation.value().toLowerCase();
-                    actionMap.put(actionName, new CommandMethod(controllerInstance, method));
-                }
-                logger.info("Registered controller for command: " + commandName);
-
-            } catch (Exception e) {
-                logger.error("Failed to register controller: " + clazz.getName(), e);
-            }
+        @Override
+        public void run() {
+            spec.commandLine().usage(spec.commandLine().getOut());
         }
     }
 
     public static String dispatch(String inputLine) {
-        String[] parts = inputLine.trim().split("\\s+");
-        if (parts.length < 3 || !parts[0].equalsIgnoreCase("cld")) {
+        final String[] parts;
+        try {
+            parts = tokenize(inputLine);
+        } catch (IllegalArgumentException e) {
+            return "Invalid command line: " + e.getMessage();
+        }
+
+        if (parts.length == 0 || !parts[0].equalsIgnoreCase("cld")) {
             return "Invalid command format. Expected: cld <command> <action> [args]";
         }
 
-        String commandName = parts[1].toLowerCase();
-        String actionName = parts[2].toLowerCase();
+        StringWriter response = new StringWriter();
+        PrintWriter writer = new PrintWriter(response);
+        CommandLine commandLine = new CommandLine(new RootCommand());
+        commandLine.setOut(writer);
+        commandLine.setErr(writer);
+        commandLine.setParameterExceptionHandler((exception, arguments) -> {
+            writer.println("Error: " + exception.getMessage());
+            writer.print(exception.getCommandLine().getUsageMessage());
+            return 2;
+        });
+        commandLine.setExecutionExceptionHandler((exception, command, parseResult) -> {
+            writer.println("Error: " + exception.getMessage());
+            return 1;
+        });
 
-        Map<String, CommandMethod> actionMap = registry.get(commandName);
-        if (actionMap == null) {
-            return "Unknown command: " + commandName;
+        int exitCode = commandLine.execute(Arrays.copyOfRange(parts, 1, parts.length));
+        writer.flush();
+        String output = response.toString().stripTrailing();
+        if (!output.isEmpty()) {
+            return output;
+        }
+        return exitCode == 0 ? "Success" : "Command failed";
+    }
+
+    private static String[] tokenize(String inputLine) {
+        List<String> arguments = new ArrayList<>();
+        StringBuilder argument = new StringBuilder();
+        char quote = 0;
+        boolean argumentStarted = false;
+
+        for (int i = 0; i < inputLine.length(); i++) {
+            char current = inputLine.charAt(i);
+            if (current == '\\' && i + 1 < inputLine.length()) {
+                char next = inputLine.charAt(i + 1);
+                if (next == '\\' || next == '"' || next == '\'' || Character.isWhitespace(next)) {
+                    argument.append(next);
+                    argumentStarted = true;
+                    i++;
+                    continue;
+                }
+            }
+
+            if (quote != 0) {
+                if (current == quote) {
+                    quote = 0;
+                } else {
+                    argument.append(current);
+                }
+                argumentStarted = true;
+            } else if (current == '"' || current == '\'') {
+                quote = current;
+                argumentStarted = true;
+            } else if (Character.isWhitespace(current)) {
+                if (argumentStarted) {
+                    arguments.add(argument.toString());
+                    argument.setLength(0);
+                    argumentStarted = false;
+                }
+            } else {
+                argument.append(current);
+                argumentStarted = true;
+            }
         }
 
-        CommandMethod cmdMethod = actionMap.get(actionName);
-        if (cmdMethod == null) {
-            return "Unknown action '" + actionName + "' for command '" + commandName + "'";
+        if (quote != 0) {
+            throw new IllegalArgumentException("Unterminated quoted argument");
         }
-
-        try {
-            Object result = cmdMethod.method.invoke(cmdMethod.instance, (Object) parts);
-            return result != null ? result.toString() : "Success";
-        } catch (Exception e) {
-            logger.error("Error executing command", e);
-            Throwable cause = e.getCause();
-            return "Error executing command: " + (cause != null ? cause.getMessage() : e.getMessage());
+        if (argumentStarted) {
+            arguments.add(argument.toString());
         }
+        return arguments.toArray(new String[0]);
     }
 }

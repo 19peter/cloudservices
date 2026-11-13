@@ -113,12 +113,16 @@ All commands can be run via CMD (`cld ...`) or PowerShell (`.\cld ...`):
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
+| `cld --help` | None | Displays top-level CLI help. |
+| `cld cu --help` | None | Displays compute-unit commands and aliases. |
 | `cld cu list` | None | Lists all active compute units, their states, PIDs, and workloads. |
-| `cld cu create` | Optional: `--capacity <MICRO\|MEDIUM\|LARGE\|ULTRA> [name] [jar\|js] <path>` | Creates a new compute unit (either unallocated or directly reserved with a workload). Capacity defaults to `MICRO`. |
+| `cld cu create` | Optional: `--capacity <MICRO\|MEDIUM\|LARGE\|ULTRA>`, `--name <name>`, `[jar\|js] <path> [args...]` | Creates a new compute unit, optionally with a workload. Capacity defaults to `MICRO`. |
 | `cld cu assign` | `<unitId> [jar\|js] <path>` | Assigns a workload to an available unit and boots its runtime. |
 | `cld cu run` | `<unitId>` | Submits and executes the workload, capturing the operating system PID. |
+| `cld cu execute` | `<unitId>` | Alias for `run`. |
 | `cld cu status` | `<unitId>` | Displays detailed metadata (ID, state, PID, created date, workload). |
 | `cld cu stop` | `<unitId>` | Terminates the active workload process. |
+| `cld cu terminate` | `<unitId>` | Alias for `stop`. |
 | `cld cu release` | `<unitId>` | Clears the workload and resets the compute unit to `AVAILABLE`. |
 | `cld cu kill` | `<unitId>` | Terminates, releases, and purges the unit from `Memdb`. |
 
@@ -178,6 +182,7 @@ In a separate terminal window:
 # PowerShell
 .\cld cu list
 .\cld cu create jar target\my-app.jar
+.\cld cu create --name my-app --capacity LARGE jar target\my-app.jar
 .\cld cu create --capacity LARGE my-app jar target\my-app.jar
 .\cld cu run <unit-id>
 .\cld cu status <unit-id>

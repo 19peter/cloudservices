@@ -16,9 +16,12 @@ if (-not $CommandArgs -or $CommandArgs.Count -eq 0) {
     Write-Host "               CLD Platform CLI                    " -ForegroundColor Cyan
     Write-Host "===================================================" -ForegroundColor Cyan
     Write-Host "Usage:"
+    Write-Host "  cld --help"
+    Write-Host "  cld cu --help"
     Write-Host "  cld cu list                 (CMD: cld, PowerShell: .\cld)"
     Write-Host "  cld cu create"
     Write-Host "  cld cu create [jar|js] <file-path>"
+    Write-Host "  cld cu create --capacity <MICRO|MEDIUM|LARGE|ULTRA> [--name <name>]"
     Write-Host "  cld cu assign <unit-id> [jar|js] <file-path>"
     Write-Host "  cld cu run <unit-id>"
     Write-Host "  cld cu status <unit-id>"
@@ -29,8 +32,12 @@ if (-not $CommandArgs -or $CommandArgs.Count -eq 0) {
     exit 0
 }
 
-$cmdLine = ($CommandArgs -join ' ').Trim()
-if (-not $cmdLine.ToLower().StartsWith('cld ')) {
+$hasClDPrefix = $CommandArgs.Count -gt 0 -and $CommandArgs[0].Equals('cld', [StringComparison]::OrdinalIgnoreCase)
+$escapedArgs = $CommandArgs | ForEach-Object {
+    '"' + $_.Replace('\', '\\').Replace('"', '\"') + '"'
+}
+$cmdLine = ($escapedArgs -join ' ').Trim()
+if (-not $hasClDPrefix) {
     $cmdLine = 'cld ' + $cmdLine
 }
 
