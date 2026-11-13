@@ -17,17 +17,18 @@ public class ComputeUnit implements GatewayServerIntegration {
     private final UUID id;
     private final LocalDateTime createdAt;
     private final String name;
-    private final Semaphore capacity = new Semaphore(4);
+    private final Semaphore capacity;
     private Workload workload;
     private RuntimeInterface runtimeInterface;
     private ComputeUnitState state;
     private String pid;
 
 
-    public ComputeUnit(Workload workload, String name) {
+    public ComputeUnit(Workload workload, String name, int capacity) {
         this.id = UUID.randomUUID();
         this.name = name;
         this.createdAt = LocalDateTime.now();
+        this.capacity = new Semaphore(capacity);
         this.state = ComputeUnitState.AVAILABLE;
         if (workload != null) {
             assignWorkload(workload);

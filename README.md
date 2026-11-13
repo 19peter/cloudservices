@@ -114,7 +114,7 @@ All commands can be run via CMD (`cld ...`) or PowerShell (`.\cld ...`):
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
 | `cld cu list` | None | Lists all active compute units, their states, PIDs, and workloads. |
-| `cld cu create` | Optional: `[jar\|js] <path>` | Creates a new compute unit (either unallocated or directly reserved with a workload). |
+| `cld cu create` | Optional: `--capacity <MICRO\|MEDIUM\|LARGE\|ULTRA> [name] [jar\|js] <path>` | Creates a new compute unit (either unallocated or directly reserved with a workload). Capacity defaults to `MICRO`. |
 | `cld cu assign` | `<unitId> [jar\|js] <path>` | Assigns a workload to an available unit and boots its runtime. |
 | `cld cu run` | `<unitId>` | Submits and executes the workload, capturing the operating system PID. |
 | `cld cu status` | `<unitId>` | Displays detailed metadata (ID, state, PID, created date, workload). |
@@ -178,6 +178,7 @@ In a separate terminal window:
 # PowerShell
 .\cld cu list
 .\cld cu create jar target\my-app.jar
+.\cld cu create --capacity LARGE my-app jar target\my-app.jar
 .\cld cu run <unit-id>
 .\cld cu status <unit-id>
 

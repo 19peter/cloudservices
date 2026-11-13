@@ -1,7 +1,9 @@
 package org.cloudServices.cmd.controllers;
 
+import org.cloudServices.builder.ComputeUnitBuilder;
 import org.cloudServices.global.db.Memdb;
 import org.cloudServices.infra.computeUnit.ComputeUnit;
+import org.cloudServices.infra.computeUnit.ComputeUnitCapacity;
 import org.cloudServices.infra.runtimes.JSRuntime.JSFileWorkload;
 import org.cloudServices.infra.runtimes.JarRuntime.JarWorkload;
 import org.cloudServices.infra.runtimes.Workload;
@@ -10,6 +12,7 @@ import org.cloudServices.shared.annotations.CLDCommand;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -24,28 +27,78 @@ public class ComputeUnitController {
         try {
             Workload workload = null;
             String name = null;
+            ComputeUnitCapacity capacity = null;
+            boolean capacitySpecified = false;
+            List<String> createArgs = new ArrayList<>();
 
-            if (args.length >= 4) {
-                String firstArg = args[3];
+            for (int i = 0; i < Math.min(args.length, 3); i++) {
+                createArgs.add(args[i]);
+            }
+
+            int argIndex = 3;
+            while (argIndex < args.length && args[argIndex].startsWith("--capacity")) {
+                String capacityValue;
+                if (args[argIndex].equals("--capacity")) {
+                    if (argIndex + 1 >= args.length) {
+                        argIndex++;
+                        break;
+                    }
+                    capacityValue = args[argIndex + 1];
+                    argIndex += 2;
+                } else if (args[argIndex].startsWith("--capacity=")) {
+                    capacityValue = args[argIndex].substring("--capacity=".length());
+                    argIndex++;
+                } else {
+                    throw new IllegalArgumentException("Invalid capacity option: " + args[argIndex]);
+                }
+
+                if (capacitySpecified) {
+                    throw new IllegalArgumentException("--capacity may only be specified once");
+                }
+                capacity = parseCapacity(capacityValue);
+                capacitySpecified = true;
+            }
+            while (argIndex < args.length) {
+                createArgs.add(args[argIndex++]);
+            }
+            String[] positionalArgs = createArgs.toArray(new String[0]);
+
+            if (positionalArgs.length >= 4) {
+                String firstArg = positionalArgs[3];
                 // Check if first arg is a workload spec (e.g. "jar", "js", or a file path)
                 if (firstArg.equalsIgnoreCase("jar") || firstArg.equalsIgnoreCase("js")
                         || firstArg.endsWith(".jar") || firstArg.endsWith(".js")) {
-                    workload = parseWorkload(args, 3);
+                    workload = parseWorkload(positionalArgs, 3);
                 } else {
                     // Otherwise treat it as the compute unit name
                     name = firstArg;
-                    if (args.length >= 5) {
-                        workload = parseWorkload(args, 4);
+                    if (positionalArgs.length >= 5) {
+                        workload = parseWorkload(positionalArgs, 4);
                     }
                 }
             }
 
-            ComputeUnit cu = new ComputeUnit(workload, name);
+            ComputeUnitBuilder builder = new ComputeUnitBuilder()
+                    .workload(workload)
+                    .name(name);
+            if (capacity != null) {
+                builder.capacity(capacity);
+            }
+            ComputeUnit cu = builder.build();
             return "ComputeUnit created successfully. ID: " + cu.getId()
                     + (name != null ? " [Name: " + name + "]" : "")
                     + " [State: " + cu.getState() + "]";
         } catch (Exception e) {
             return "Error creating compute unit: " + e.getMessage();
+        }
+    }
+
+    private ComputeUnitCapacity parseCapacity(String value) {
+        try {
+            return ComputeUnitCapacity.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "Invalid capacity '" + value + "'. Choose MICRO, MEDIUM, LARGE, or ULTRA.");
         }
     }
 
