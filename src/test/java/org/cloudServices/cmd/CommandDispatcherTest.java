@@ -1,10 +1,18 @@
 package org.cloudServices.cmd;
 
+import org.cloudServices.global.db.Memdb;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandDispatcherTest {
+
+    @BeforeAll
+    static void initializeMemdb() {
+        Memdb.init();
+    }
 
     @Test
     void createHelpListsCapacityAndNameOptions() {
@@ -36,5 +44,18 @@ class CommandDispatcherTest {
                 "cld cu create --name \"unit with spaces\" --capacity LARGE");
 
         assertTrue(response.contains("[Name: unit with spaces]"));
+    }
+
+    @Test
+    void listShowsNameAndDoesNotDuplicateNamedUnits() {
+        String unitName = "list-name-test";
+        CommandDispatcher.dispatch("cld cu create --name " + unitName);
+
+        String response = CommandDispatcher.dispatch("cld cu list");
+        long matchingRows = response.lines()
+                .filter(line -> line.contains("Name: " + unitName))
+                .count();
+
+        assertEquals(1, matchingRows);
     }
 }

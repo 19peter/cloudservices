@@ -18,6 +18,8 @@ public final class StaticApiServer {
             new Response(200, "{\"status\":\"UP\"}"),
             new Route("GET", "/get/items"),
             new Response(200, "[{\"id\":1,\"name\":\"alpha\"},{\"id\":2,\"name\":\"beta\"}]"),
+            new Route("GET", "/get/slow"),
+            new Response(200, "{\"message\":\"static delayed GET response\"}"),
             new Route("POST", "/post"),
             new Response(200, "{\"message\":\"static POST response\",\"received\":true}"),
             new Route("POST", "/post/created"),
@@ -82,6 +84,16 @@ public final class StaticApiServer {
                 sendJson(exchange, 404, "{\"error\":\"not found\"}");
             }
             return;
+        }
+
+        if (path.equals("/get/slow")) {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                sendJson(exchange, 503, "{\"error\":\"request interrupted\"}");
+                return;
+            }
         }
 
         sendJson(exchange, response.status(), response.body());

@@ -14,8 +14,10 @@ import picocli.CommandLine.Spec;
 import picocli.CommandLine.Model.CommandSpec;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Command(
         name = "cu",
@@ -296,16 +298,23 @@ public class ComputeUnitController implements Runnable {
         @Override
         public void run() {
             Map<String, ComputeUnit> allUnits = Memdb.getAll();
-            if (allUnits.isEmpty()) {
+            Map<UUID, ComputeUnit> uniqueUnits = new LinkedHashMap<>();
+            for (ComputeUnit cu : allUnits.values()) {
+                uniqueUnits.put(cu.getId(), cu);
+            }
+
+            if (uniqueUnits.isEmpty()) {
                 respond(spec, "No compute units registered.");
                 return;
             }
 
             StringBuilder sb = new StringBuilder();
-            sb.append("Active Compute Units (").append(allUnits.size()).append("):\n");
-            for (ComputeUnit cu : allUnits.values()) {
-                sb.append(String.format("  [%s] State: %-10s PID: %-8s Workload: %s\n",
+            sb.append("Active Compute Units (").append(uniqueUnits.size()).append("):\n");
+            for (ComputeUnit cu : uniqueUnits.values()) {
+                String name = cu.getName() == null || cu.getName().isBlank() ? "N/A" : cu.getName();
+                sb.append(String.format("  [%s] Name: %-20s State: %-10s PID: %-8s Workload: %s\n",
                         cu.getId(),
+                        name,
                         cu.getState(),
                         cu.getPid() != null ? cu.getPid() : "N/A",
                         describeWorkload(cu.getWorkload())));
