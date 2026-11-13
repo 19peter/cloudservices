@@ -8,7 +8,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Dns {
-    //Id -> URL
     private static final Map<String, String> dnsRegistry = new ConcurrentHashMap<>();
 
     public static void init() {
@@ -16,17 +15,26 @@ public class Dns {
             switch (event.event()) {
                 case COMPUTE_UNIT_RESERVED -> {
                     if (event.service() instanceof ComputeUnit cu) {
-                        dnsRegistry.put(cu.getId().toString(), "127.0.0.1:" + cu.getPort());
+                        String targetUrl = "http://127.0.0.1:" + cu.getPort();
+                        dnsRegistry.put(cu.getId().toString(), targetUrl);
+                        if (cu.getName() != null && !cu.getName().isBlank()) {
+                            dnsRegistry.put(cu.getName(), targetUrl);
+                        }
                     }
                 }
 
                 case COMPUTE_UNIT_KILLED, COMPUTE_UNIT_RELEASED -> {
                     if (event.service() instanceof ComputeUnit cu) {
                         dnsRegistry.remove(cu.getId().toString());
+                        if (cu.getName() != null && !cu.getName().isBlank()) {
+                            dnsRegistry.remove(cu.getName());
+                        }
+                    } else if (event.service() instanceof UUID uuid) {
+                        dnsRegistry.remove(uuid.toString());
+                    } else if (event.service() instanceof String id) {
+                        dnsRegistry.remove(id);
                     }
                 }
-
-
 
                 default -> {
                     // other events (RESERVED, RUNNING, STOPPED, etc.)
@@ -35,8 +43,7 @@ public class Dns {
         });
     }
 
-    //Get url by id
-    public static String resolve(String id) {
-        return dnsRegistry.get(id);
+    public static String resolve(String idOrName) {
+        return dnsRegistry.get(idOrName);
     }
 }

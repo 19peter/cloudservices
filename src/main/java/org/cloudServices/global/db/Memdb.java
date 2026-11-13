@@ -17,12 +17,18 @@ public class Memdb {
                 case COMPUTE_UNIT_CREATED -> {
                     if (event.service() instanceof ComputeUnit cu) {
                         services.put(cu.getId().toString(), cu);
+                        if (cu.getName() != null && !cu.getName().isBlank()) {
+                            services.put(cu.getName(), cu);
+                        }
                     }
                 }
 
                 case COMPUTE_UNIT_KILLED -> {
                     if (event.service() instanceof ComputeUnit cu) {
                         services.remove(cu.getId().toString());
+                        if (cu.getName() != null && !cu.getName().isBlank()) {
+                            services.remove(cu.getName());
+                        }
                     } else if (event.service() instanceof UUID uuid) {
                         services.remove(uuid.toString());
                     } else if (event.service() instanceof String id) {
@@ -36,8 +42,17 @@ public class Memdb {
         });
     }
 
-    public static ComputeUnit getInstance(String id) {
-        return services.get(id);
+    public static ComputeUnit getInstance(String idOrName) {
+        ComputeUnit instance = services.get(idOrName);
+        if (instance != null) {
+            return instance;
+        }
+        for (ComputeUnit candidate : services.values()) {
+            if (candidate.getName() != null && candidate.getName().equalsIgnoreCase(idOrName)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     public static Map<String, ComputeUnit> getAll() {
