@@ -17,14 +17,19 @@ graph TD
 
     subgraph "Control Plane (org.cloudServices.cmd)"
         Daemon["DaemonServer (Port 9090)"]
-        Dispatcher["CommandDispatcher (@CLDCommand / @CLDAction)"]
-        Controller["ComputeUnitController (cld cu ...)"]
+        Dispatcher["CommandDispatcher (Picocli adapter)"]
+        Controller["ComputeUnitController (Picocli cu commands)"]
     end
 
     subgraph "Global State & Events (org.cloudServices.global)"
         Memdb["Memdb (In-Memory Database)"]
         EventBus["EventBus (Pub/Sub)"]
-        Dns["Dns (Service Discovery)"]
+        Dns["Dns (In-Memory Service Discovery)"]
+    end
+
+    subgraph "Ingress"
+        ApiClient["HTTP Client"]
+        Gateway["GatewayServer (Port 8000)"]
     end
 
     subgraph "Compute Layer (org.cloudServices.infra)"
@@ -48,6 +53,9 @@ graph TD
     Dispatcher --> Controller
     Controller --> CU
     Controller --> Memdb
+    ApiClient -->|HTTP| Gateway
+    Gateway -->|Resolve name or ID| Dns
+    Gateway -->|Proxy to allocated backend port| CU
 
     CU -->|Resolves Runtime| Registry
     Registry --> JarRuntime
@@ -79,7 +87,8 @@ Execution runtimes implement the Strategy Pattern to insulate `ComputeUnit` from
 ### 3. Global Subsystems (`org.cloudServices.global`)
 - **`Memdb`**: In-memory database tracking active compute units. Subscribes directly to `EventBus` to register newly created units and deregister killed units automatically.
 - **`EventBus`**: Thread-safe publisher-subscriber message broker (`CopyOnWriteArrayList`) broadcasting system events.
-- **`Dns`**: In-memory registry for service discovery and address resolution.
+- **`Dns`**: In-memory registry mapping a reserved compute unit's ID and optional name to its backend address. This is application-level service discovery, not an operating-system DNS entry.
+- **`GatewayServer`**: HTTP ingress on port `8000`. It resolves the first path segment as a compute unit ID or name and proxies the remaining path to that workload's dynamically allocated backend port.
 
 ### 4. Command Daemon & CLI (`org.cloudServices.cmd`)
 - **`DaemonServer`**: Multi-threaded TCP daemon on port `9090` listening for external terminal commands.
@@ -120,11 +129,36 @@ All commands can be run via CMD (`cld ...`) or PowerShell (`.\cld ...`):
 | `cld cu assign` | `<unitId> [jar\|js] <path>` | Assigns a workload to an available unit and boots its runtime. |
 | `cld cu run` | `<unitId>` | Submits and executes the workload, capturing the operating system PID. |
 | `cld cu execute` | `<unitId>` | Alias for `run`. |
-| `cld cu status` | `<unitId>` | Displays detailed metadata (ID, state, PID, created date, workload). |
+| `cld cu status` | `<unitId>` | Displays metadata including the allocated backend port when available. |
 | `cld cu stop` | `<unitId>` | Terminates the active workload process. |
 | `cld cu terminate` | `<unitId>` | Alias for `stop`. |
 | `cld cu release` | `<unitId>` | Clears the workload and resets the compute unit to `AVAILABLE`. |
 | `cld cu kill` | `<unitId>` | Terminates, releases, and purges the unit from `Memdb`. |
+
+### Accessing a Workload
+
+You do **not** need the workload's allocated backend port when using the gateway. After assigning a workload, use the compute unit's name (or ID) as the URL path prefix:
+
+```text
+http://127.0.0.1:8000/<unit-name>/<api-path>
+```
+
+For example, for a unit named `static-api`:
+
+```powershell
+curl.exe http://127.0.0.1:8000/static-api/get
+```
+
+The name acts as an alias in the application's in-memory `Dns` registry; it does not create a system DNS hostname. The gateway listens on port `8000`, so `http://127.0.0.1/<unit-name>/...` would use port `80` and will not reach it unless a separate proxy is configured.
+
+For direct access that bypasses the gateway, get the backend port from `cld cu status <unit-name>` and request the workload directly:
+
+```powershell
+.\cld cu status static-api
+curl.exe http://127.0.0.1:<backend-port>/get
+```
+
+The port is shown as `N/A` until a workload runtime has allocated one.
 
 ---
 
@@ -139,12 +173,12 @@ cloudservice/
     └── main/java/org/cloudServices/
         ├── Main.java                        # System bootstrap entrypoint
         ├── cmd/
-        │   ├── CommandDispatcher.java       # Annotation-driven command router
-        │   ├── ComputeUnitController.java   # CLI controller for compute units
+        │   ├── CommandDispatcher.java       # Picocli parser and daemon response adapter
+        │   ├── controllers/                 # Picocli compute-unit commands
         │   └── DaemonServer.java            # TCP socket listener (port 9090)
         ├── global/
         │   ├── db/Memdb.java                # In-memory service & unit registry
-        │   ├── dns/Dns.java                 # Service discovery registry
+        │   ├── dns/Dns.java                 # In-memory ID/name-to-backend registry
         │   └── eventbus/EventBus.java       # Global Pub/Sub message broker
         ├── infra/
         │   ├── computeUnit/
@@ -161,7 +195,6 @@ cloudservice/
         │           ├── JSExecutorRuntime.java
         │           └── JSFileWorkload.java
         └── shared/
-            ├── annotations/                 # @CLDCommand & @CLDAction
             └── enums/Events.java            # EventBus lifecycle event types
 ```
 
@@ -186,6 +219,7 @@ In a separate terminal window:
 .\cld cu create --capacity LARGE my-app jar target\my-app.jar
 .\cld cu run <unit-id>
 .\cld cu status <unit-id>
+curl.exe http://127.0.0.1:8000/my-app/get
 
 # Or Windows Command Prompt
 cld cu list
