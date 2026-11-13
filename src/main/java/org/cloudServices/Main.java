@@ -1,7 +1,7 @@
 package org.cloudServices;
 
 import org.cloudServices.cmd.CommandDispatcher;
-import org.cloudServices.cmd.DaemonServer;
+import org.cloudServices.servers.DaemonServer;
 import org.cloudServices.global.db.Memdb;
 import org.cloudServices.global.dns.Dns;
 

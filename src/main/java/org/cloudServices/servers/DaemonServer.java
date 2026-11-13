@@ -1,8 +1,9 @@
-package org.cloudServices.cmd;
+package org.cloudServices.servers;
 
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.cloudServices.cmd.CommandDispatcher;
 
 import java.io.BufferedReader;
 import java.io.IOException;

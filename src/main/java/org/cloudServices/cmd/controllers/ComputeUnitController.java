@@ -23,12 +23,26 @@ public class ComputeUnitController {
     public String create(String[] args) {
         try {
             Workload workload = null;
+            String name = null;
+
             if (args.length >= 4) {
-                workload = parseWorkload(args, 3);
+                String firstArg = args[3];
+                // Check if first arg is a workload spec (e.g. "jar", "js", or a file path)
+                if (firstArg.equalsIgnoreCase("jar") || firstArg.equalsIgnoreCase("js")
+                        || firstArg.endsWith(".jar") || firstArg.endsWith(".js")) {
+                    workload = parseWorkload(args, 3);
+                } else {
+                    // Otherwise treat it as the compute unit name
+                    name = firstArg;
+                    if (args.length >= 5) {
+                        workload = parseWorkload(args, 4);
+                    }
+                }
             }
 
-            ComputeUnit cu = new ComputeUnit(workload);
+            ComputeUnit cu = new ComputeUnit(workload, name);
             return "ComputeUnit created successfully. ID: " + cu.getId()
+                    + (name != null ? " [Name: " + name + "]" : "")
                     + " [State: " + cu.getState() + "]";
         } catch (Exception e) {
             return "Error creating compute unit: " + e.getMessage();
