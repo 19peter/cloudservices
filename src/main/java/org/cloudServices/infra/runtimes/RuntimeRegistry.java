@@ -1,7 +1,5 @@
 package org.cloudServices.infra.runtimes;
 
-import org.cloudServices.infra.runtimes.JSRuntime.JSExecutorRuntime;
-import org.cloudServices.infra.runtimes.JSRuntime.JSFileWorkload;
 import org.cloudServices.infra.runtimes.JarRuntime.JarExecutorRuntime;
 import org.cloudServices.infra.runtimes.JarRuntime.JarWorkload;
 
@@ -32,7 +30,6 @@ public class RuntimeRegistry {
      */
     private static void registerDefaults() {
         register(JarWorkload.class, JarExecutorRuntime::new);
-        register(JSFileWorkload.class, JSExecutorRuntime::new);
     }
 
     /**
@@ -42,11 +39,10 @@ public class RuntimeRegistry {
      * @param factory      the factory function that produces a RuntimeInterface
      * @param <T>          the concrete workload type
      */
-    @SuppressWarnings("unchecked")
     public static <T extends Workload> void register(Class<T> workloadType, Function<T, RuntimeInterface> factory) {
         Objects.requireNonNull(workloadType, "workloadType must not be null");
         Objects.requireNonNull(factory, "factory must not be null");
-        factories.put(workloadType, (Function<? extends Workload, RuntimeInterface>) factory);
+        factories.put(workloadType, factory);
     }
 
     /**

@@ -9,5 +9,4 @@ public record JarWorkload(
     String jarPath,
     List<String> args,
     List<String> jvmOptions,
-    Map<String, String> environment) implements Workload {
-}
+    Map<String, String> environment) implements Workload { }

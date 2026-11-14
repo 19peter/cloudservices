@@ -13,7 +13,7 @@ public class Dns {
     public static void init() {
         EventBus.subscribe(event -> {
             switch (event.event()) {
-                case COMPUTE_UNIT_RESERVED -> {
+                case COMPUTE_UNIT_RUNNING -> {
                     if (event.service() instanceof ComputeUnit cu) {
                         String targetUrl = "http://127.0.0.1:" + cu.getPort();
                         dnsRegistry.put(cu.getId().toString(), targetUrl);
@@ -23,7 +23,7 @@ public class Dns {
                     }
                 }
 
-                case COMPUTE_UNIT_KILLED, COMPUTE_UNIT_RELEASED -> {
+                case COMPUTE_UNIT_RESERVED, COMPUTE_UNIT_KILLED, COMPUTE_UNIT_RELEASED -> {
                     if (event.service() instanceof ComputeUnit cu) {
                         dnsRegistry.remove(cu.getId().toString());
                         if (cu.getName() != null && !cu.getName().isBlank()) {

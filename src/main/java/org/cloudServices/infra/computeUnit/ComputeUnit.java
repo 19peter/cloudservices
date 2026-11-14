@@ -51,6 +51,7 @@ public class ComputeUnit implements GatewayServerIntegration {
         if (this.state != ComputeUnitState.RESERVED) throw new IllegalStateException("Compute unit is not reserved");
         this.pid = this.runtimeInterface.submit();
         this.state = ComputeUnitState.RUNNING;
+        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RUNNING, this));
         return this.pid;
     }
 
@@ -58,6 +59,7 @@ public class ComputeUnit implements GatewayServerIntegration {
         if (this.state != ComputeUnitState.RUNNING) throw new IllegalStateException("Compute unit is not running");
         this.runtimeInterface.stop();
         this.state = ComputeUnitState.RESERVED;
+        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RESERVED, this));
     }
 
     public void releaseWorkload() {

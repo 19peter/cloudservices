@@ -19,7 +19,6 @@ public class JarExecutorRuntime implements RuntimeInterface {
     private Process process;
     private boolean booted = false;
     private JarWorkload workload;
-    private ProcessBuilder processBuilder;
     private int allocatedPort = 0;
 
     public JarExecutorRuntime(JarWorkload workload) {
@@ -50,39 +49,8 @@ public class JarExecutorRuntime implements RuntimeInterface {
             throw new IllegalStateException("A process is already running on this runtime (PID: " + process.pid() + ")");
         }
 
-        if (this.allocatedPort <= 0) {
-            this.allocatedPort = PortAllocator.allocate();
-        }
-
-        List<String> command = new ArrayList<>();
-        command.add(resolveJavaBinary());
-
-        if (this.workload.jvmOptions() != null && !this.workload.jvmOptions().isEmpty()) {
-            command.addAll(this.workload.jvmOptions());
-        }
-
-        command.add("-jar");
-        command.add(jarFile.getAbsolutePath());
-
-        // Inject dynamic port argument to override hardcoded server.port in application.properties
-        command.add("--server.port=" + this.allocatedPort);
-
-        if (this.workload.args() != null && !this.workload.args().isEmpty()) {
-            command.addAll(this.workload.args());
-        }
-
-        this.processBuilder = new ProcessBuilder(command);
-
-        if (this.workload.environment() != null && !this.workload.environment().isEmpty()) {
-            this.processBuilder.environment().putAll(this.workload.environment());
-        }
-
-        // Inject environment variables (supports Spring Boot SERVER_PORT and standard cloud PORT)
-        this.processBuilder.environment().put("SERVER_PORT", String.valueOf(this.allocatedPort));
-        this.processBuilder.environment().put("PORT", String.valueOf(this.allocatedPort));
-
         this.booted = true;
-        logger.info("JarExecutorRuntime booted successfully on port: {}.", this.allocatedPort);
+        logger.info("JarExecutorRuntime booted successfully.");
     }
 
     @Override
@@ -100,14 +68,23 @@ public class JarExecutorRuntime implements RuntimeInterface {
         }
 
         try {
-            this.process = processBuilder.start();
-            long pid = process.pid();
-            logger.info("Started JarWorkload process with PID: {} for jar: {}", pid, this.workload.jarPath());
-            return String.valueOf(pid);
+            File jarFile = new File(this.workload.jarPath());
+            if (this.allocatedPort <= 0) {
+                this.allocatedPort = PortAllocator.allocate();
+            }
+            this.process = createProcessBuilder(jarFile).start();
         } catch (IOException e) {
+            releaseAllocatedPort();
             logger.error("Failed to start JarWorkload process for jar: " + this.workload.jarPath(), e);
             throw new RuntimeException("Failed to start JarWorkload process: " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            releaseAllocatedPort();
+            throw e;
         }
+
+        long pid = process.pid();
+        logger.info("Started JarWorkload process with PID: {} for jar: {}", pid, this.workload.jarPath());
+        return String.valueOf(pid);
     }
 
     @Override
@@ -131,10 +108,7 @@ public class JarExecutorRuntime implements RuntimeInterface {
             logger.info("No active process to stop.");
         }
 
-        if (this.allocatedPort > 0) {
-            PortAllocator.release(this.allocatedPort);
-            this.allocatedPort = 0;
-        }
+        releaseAllocatedPort();
     }
 
     public synchronized int getPort() {
@@ -176,5 +150,38 @@ public class JarExecutorRuntime implements RuntimeInterface {
             }
         }
         return "java";
+    }
+
+    private ProcessBuilder createProcessBuilder(File jarFile) {
+        List<String> command = new ArrayList<>();
+        command.add(resolveJavaBinary());
+
+        if (this.workload.jvmOptions() != null && !this.workload.jvmOptions().isEmpty()) {
+            command.addAll(this.workload.jvmOptions());
+        }
+
+        command.add("-jar");
+        command.add(jarFile.getAbsolutePath());
+        command.add("--server.port=" + this.allocatedPort);
+
+        if (this.workload.args() != null && !this.workload.args().isEmpty()) {
+            command.addAll(this.workload.args());
+        }
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+        if (this.workload.environment() != null && !this.workload.environment().isEmpty()) {
+            builder.environment().putAll(this.workload.environment());
+        }
+
+        builder.environment().put("SERVER_PORT", String.valueOf(this.allocatedPort));
+        builder.environment().put("PORT", String.valueOf(this.allocatedPort));
+        return builder;
+    }
+
+    private void releaseAllocatedPort() {
+        if (this.allocatedPort > 0) {
+            PortAllocator.release(this.allocatedPort);
+            this.allocatedPort = 0;
+        }
     }
 }
