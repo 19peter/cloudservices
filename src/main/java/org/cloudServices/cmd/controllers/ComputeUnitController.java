@@ -161,7 +161,7 @@ public class ComputeUnitController implements Runnable {
 
             try {
                 String pid = cu.executeWorkload();
-                respond(spec, "ComputeUnit " + unitId + " running with PID: " + pid + " [State: " + cu.getState() + "]");
+                respond(spec, "ComputeUnit " + unitId + " running with runtime ID: " + pid + " [State: " + cu.getState() + "]");
             } catch (Exception e) {
                 respond(spec, "Error executing compute unit: " + e.getMessage());
             }
@@ -279,7 +279,7 @@ public class ComputeUnitController implements Runnable {
             StringBuilder sb = new StringBuilder();
             sb.append("ComputeUnit: ").append(cu.getId()).append("\n");
             sb.append("  State:      ").append(cu.getState()).append("\n");
-            sb.append("  PID:        ").append(cu.getPid() != null ? cu.getPid() : "N/A").append("\n");
+            sb.append("  Runtime ID: ").append(cu.getRuntimeInstanceId() != null ? cu.getRuntimeInstanceId() : "N/A").append("\n");
             sb.append("  Created:    ").append(cu.getCreatedAt()).append("\n");
             sb.append("  Workload:   ").append(describeWorkload(cu.getWorkload()));
             respond(spec, sb.toString());
@@ -312,11 +312,11 @@ public class ComputeUnitController implements Runnable {
             sb.append("Active Compute Units (").append(uniqueUnits.size()).append("):\n");
             for (ComputeUnit cu : uniqueUnits.values()) {
                 String name = cu.getName() == null || cu.getName().isBlank() ? "N/A" : cu.getName();
-                sb.append(String.format("  [%s] Name: %-20s State: %-10s PID: %-8s Workload: %s\n",
+                sb.append(String.format("  [%s] Name: %-20s State: %-10s Runtime ID: %-20s Workload: %s\n",
                         cu.getId(),
                         name,
                         cu.getState(),
-                        cu.getPid() != null ? cu.getPid() : "N/A",
+                        cu.getRuntimeInstanceId() != null ? cu.getRuntimeInstanceId() : "N/A",
                         describeWorkload(cu.getWorkload())));
             }
             respond(spec, sb.toString().stripTrailing());
