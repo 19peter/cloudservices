@@ -1,12 +1,14 @@
 package org.cloudServices.infra.computeUnit;
 
 import org.cloudServices.global.eventbus.EventBus;
-import org.cloudServices.infra.runtimes.JarRuntime.JarExecutorRuntime;
 import org.cloudServices.infra.runtimes.RuntimeInterface;
 import org.cloudServices.infra.runtimes.RuntimeRegistry;
 import org.cloudServices.infra.runtimes.Workload;
+import org.cloudServices.shared.events.ServiceIdentity;
+import org.cloudServices.shared.events.ServiceStarted;
 import org.cloudServices.shared.enums.Events;
 import org.cloudServices.shared.interfaces.GatewayServerIntegration;
+import org.cloudServices.shared.runtime.RuntimeSubmission;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -44,14 +46,17 @@ public class ComputeUnit implements GatewayServerIntegration {
         this.runtimeInterface = RuntimeRegistry.createRuntime(workload);
         this.runtimeInterface.boot();
         this.state = ComputeUnitState.RESERVED;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RESERVED, this));
+        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RESERVED, serviceIdentity()));
     }
 
     public String executeWorkload() {
         if (this.state != ComputeUnitState.RESERVED) throw new IllegalStateException("Compute unit is not reserved");
-        this.pid = this.runtimeInterface.submit();
+        RuntimeSubmission submission = this.runtimeInterface.submit();
+        this.pid = submission.processId();
         this.state = ComputeUnitState.RUNNING;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RUNNING, this));
+        EventBus.publish(new EventBus.Event(
+                Events.COMPUTE_UNIT_RUNNING,
+                new ServiceStarted(serviceIdentity(), submission.endpoint())));
         return this.pid;
     }
 
@@ -59,7 +64,7 @@ public class ComputeUnit implements GatewayServerIntegration {
         if (this.state != ComputeUnitState.RUNNING) throw new IllegalStateException("Compute unit is not running");
         this.runtimeInterface.stop();
         this.state = ComputeUnitState.RESERVED;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RESERVED, this));
+        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RESERVED, serviceIdentity()));
     }
 
     public void releaseWorkload() {
@@ -67,7 +72,7 @@ public class ComputeUnit implements GatewayServerIntegration {
         this.workload = null;
         this.runtimeInterface = null;
         this.state = ComputeUnitState.AVAILABLE;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RELEASED, this));
+        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RELEASED, serviceIdentity()));
     }
 
     public void killInstance() {
@@ -93,10 +98,6 @@ public class ComputeUnit implements GatewayServerIntegration {
         return workload;
     }
 
-    public RuntimeInterface getRuntimeInterface() {
-        return runtimeInterface;
-    }
-
     public ComputeUnitState getState() {
         return state;
     }
@@ -107,13 +108,6 @@ public class ComputeUnit implements GatewayServerIntegration {
 
     public String getName() {
         return name;
-    }
-
-    public int getPort() {
-        if (runtimeInterface instanceof JarExecutorRuntime jarRuntime) {
-            return jarRuntime.getPort();
-        }
-        return 0;
     }
 
     @Override
@@ -127,5 +121,9 @@ public class ComputeUnit implements GatewayServerIntegration {
     @Override
     public void releaseSlot() {
         capacity.release();
+    }
+
+    private ServiceIdentity serviceIdentity() {
+        return new ServiceIdentity(id.toString(), name);
     }
 }

@@ -1,7 +1,9 @@
 package org.cloudServices.infra.runtimes;
 
+import org.cloudServices.shared.runtime.RuntimeSubmission;
+
 public interface RuntimeInterface {
     void boot();
-    String submit();
+    RuntimeSubmission submit();
     void stop();
 }

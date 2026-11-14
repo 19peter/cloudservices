@@ -1,33 +1,35 @@
 package org.cloudServices.global.dns;
 
 import org.cloudServices.global.eventbus.EventBus;
-import org.cloudServices.infra.computeUnit.ComputeUnit;
+import org.cloudServices.shared.events.ServiceIdentity;
+import org.cloudServices.shared.events.ServiceStarted;
+import org.cloudServices.shared.runtime.ServiceEndpoint;
 
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Dns {
-    private static final Map<String, String> dnsRegistry = new ConcurrentHashMap<>();
+    private static final Map<String, ServiceEndpoint> dnsRegistry = new ConcurrentHashMap<>();
 
     public static void init() {
         EventBus.subscribe(event -> {
             switch (event.event()) {
                 case COMPUTE_UNIT_RUNNING -> {
-                    if (event.service() instanceof ComputeUnit cu) {
-                        String targetUrl = "http://127.0.0.1:" + cu.getPort();
-                        dnsRegistry.put(cu.getId().toString(), targetUrl);
-                        if (cu.getName() != null && !cu.getName().isBlank()) {
-                            dnsRegistry.put(cu.getName(), targetUrl);
+                    if (event.service() instanceof ServiceStarted started) {
+                        ServiceIdentity service = started.service();
+                        dnsRegistry.put(service.id(), started.endpoint());
+                        if (service.name() != null && !service.name().isBlank()) {
+                            dnsRegistry.put(service.name(), started.endpoint());
                         }
                     }
                 }
 
                 case COMPUTE_UNIT_RESERVED, COMPUTE_UNIT_KILLED, COMPUTE_UNIT_RELEASED -> {
-                    if (event.service() instanceof ComputeUnit cu) {
-                        dnsRegistry.remove(cu.getId().toString());
-                        if (cu.getName() != null && !cu.getName().isBlank()) {
-                            dnsRegistry.remove(cu.getName());
+                    if (event.service() instanceof ServiceIdentity service) {
+                        dnsRegistry.remove(service.id());
+                        if (service.name() != null && !service.name().isBlank()) {
+                            dnsRegistry.remove(service.name());
                         }
                     } else if (event.service() instanceof UUID uuid) {
                         dnsRegistry.remove(uuid.toString());
@@ -43,7 +45,7 @@ public class Dns {
         });
     }
 
-    public static String resolve(String idOrName) {
+    public static ServiceEndpoint resolve(String idOrName) {
         return dnsRegistry.get(idOrName);
     }
 }

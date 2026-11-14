@@ -3,7 +3,10 @@ package org.cloudServices.infra.runtimes.JarRuntime;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.cloudServices.global.port.PortAllocator;
+import org.cloudServices.global.port.PortAllocator.PortLease;
 import org.cloudServices.infra.runtimes.RuntimeInterface;
+import org.cloudServices.shared.runtime.RuntimeSubmission;
+import org.cloudServices.shared.runtime.ServiceEndpoint;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,7 +22,7 @@ public class JarExecutorRuntime implements RuntimeInterface {
     private Process process;
     private boolean booted = false;
     private JarWorkload workload;
-    private int allocatedPort = 0;
+    private PortLease portLease;
 
     public JarExecutorRuntime(JarWorkload workload) {
         this.workload = workload;
@@ -54,7 +57,7 @@ public class JarExecutorRuntime implements RuntimeInterface {
     }
 
     @Override
-    public synchronized String submit() {
+    public synchronized RuntimeSubmission submit() {
         if (this.workload == null) {
             throw new IllegalArgumentException("Workload cannot be null");
         }
@@ -69,22 +72,24 @@ public class JarExecutorRuntime implements RuntimeInterface {
 
         try {
             File jarFile = new File(this.workload.jarPath());
-            if (this.allocatedPort <= 0) {
-                this.allocatedPort = PortAllocator.allocate();
+            if (this.portLease == null) {
+                this.portLease = PortAllocator.allocate();
             }
             this.process = createProcessBuilder(jarFile).start();
         } catch (IOException e) {
-            releaseAllocatedPort();
+            releasePortLease();
             logger.error("Failed to start JarWorkload process for jar: " + this.workload.jarPath(), e);
             throw new RuntimeException("Failed to start JarWorkload process: " + e.getMessage(), e);
         } catch (RuntimeException e) {
-            releaseAllocatedPort();
+            releasePortLease();
             throw e;
         }
 
         long pid = process.pid();
         logger.info("Started JarWorkload process with PID: {} for jar: {}", pid, this.workload.jarPath());
-        return String.valueOf(pid);
+        return new RuntimeSubmission(
+                String.valueOf(pid),
+                ServiceEndpoint.http("127.0.0.1", this.portLease.port()));
     }
 
     @Override
@@ -108,11 +113,7 @@ public class JarExecutorRuntime implements RuntimeInterface {
             logger.info("No active process to stop.");
         }
 
-        releaseAllocatedPort();
-    }
-
-    public synchronized int getPort() {
-        return allocatedPort;
+        releasePortLease();
     }
 
     public synchronized Process getProcess() {
@@ -132,6 +133,10 @@ public class JarExecutorRuntime implements RuntimeInterface {
     }
 
     public synchronized void setWorkload(JarWorkload workload) {
+        if (process != null && process.isAlive()) {
+            throw new IllegalStateException("Cannot replace the workload while its process is running");
+        }
+        releasePortLease();
         this.workload = workload;
         this.booted = false;
     }
@@ -162,7 +167,7 @@ public class JarExecutorRuntime implements RuntimeInterface {
 
         command.add("-jar");
         command.add(jarFile.getAbsolutePath());
-        command.add("--server.port=" + this.allocatedPort);
+        command.add("--server.port=" + this.portLease.port());
 
         if (this.workload.args() != null && !this.workload.args().isEmpty()) {
             command.addAll(this.workload.args());
@@ -173,15 +178,15 @@ public class JarExecutorRuntime implements RuntimeInterface {
             builder.environment().putAll(this.workload.environment());
         }
 
-        builder.environment().put("SERVER_PORT", String.valueOf(this.allocatedPort));
-        builder.environment().put("PORT", String.valueOf(this.allocatedPort));
+        builder.environment().put("SERVER_PORT", String.valueOf(this.portLease.port()));
+        builder.environment().put("PORT", String.valueOf(this.portLease.port()));
         return builder;
     }
 
-    private void releaseAllocatedPort() {
-        if (this.allocatedPort > 0) {
-            PortAllocator.release(this.allocatedPort);
-            this.allocatedPort = 0;
+    private void releasePortLease() {
+        if (this.portLease != null) {
+            this.portLease.close();
+            this.portLease = null;
         }
     }
 }

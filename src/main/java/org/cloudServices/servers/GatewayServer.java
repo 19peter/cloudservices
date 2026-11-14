@@ -6,6 +6,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.cloudServices.global.db.Memdb;
 import org.cloudServices.global.dns.Dns;
 import org.cloudServices.shared.interfaces.GatewayServerIntegration;
+import org.cloudServices.shared.runtime.ServiceEndpoint;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -71,15 +72,15 @@ public class GatewayServer {
             }
 
             try {
-                String backendUrl = Dns.resolve(instanceId);
-                if (backendUrl == null || backendUrl.isBlank()) {
+                ServiceEndpoint endpoint = Dns.resolve(instanceId);
+                if (endpoint == null) {
                     sendResponse(exchange, 502, "502 Bad Gateway: No backend address resolved for instance " + instanceId);
                     return;
                 }
 
                 String rawQuery = requestUri.getRawQuery();
                 String targetPath = subpath + (rawQuery != null ? "?" + rawQuery : "");
-                String targetUrl = backendUrl + (targetPath == null || targetPath.isBlank() ? "/" : targetPath);
+                String targetUrl = endpoint.uri() + (targetPath == null || targetPath.isBlank() ? "/" : targetPath);
                 proxyHttp(exchange, targetUrl);
             } finally {
                 si.releaseSlot();
