@@ -23,7 +23,7 @@ public class ComputeUnit implements GatewayServerIntegration {
     private Workload workload;
     private RuntimeInterface runtimeInterface;
     private ComputeUnitState state;
-    private String pid;
+    private String runtimeInstanceId;
 
 
     public ComputeUnit(Workload workload, String name, int capacity) {
@@ -52,12 +52,12 @@ public class ComputeUnit implements GatewayServerIntegration {
     public String executeWorkload() {
         if (this.state != ComputeUnitState.RESERVED) throw new IllegalStateException("Compute unit is not reserved");
         RuntimeSubmission submission = this.runtimeInterface.submit();
-        this.pid = submission.processId();
+        this.runtimeInstanceId = submission.runtimeInstanceId();
         this.state = ComputeUnitState.RUNNING;
         EventBus.publish(new EventBus.Event(
                 Events.COMPUTE_UNIT_RUNNING,
                 new ServiceStarted(serviceIdentity(), submission.endpoint())));
-        return this.pid;
+        return this.runtimeInstanceId;
     }
 
     public void terminateWorkload() {
@@ -102,8 +102,8 @@ public class ComputeUnit implements GatewayServerIntegration {
         return state;
     }
 
-    public String getPid() {
-        return pid;
+    public String getRuntimeInstanceId() {
+        return runtimeInstanceId;
     }
 
     public String getName() {
