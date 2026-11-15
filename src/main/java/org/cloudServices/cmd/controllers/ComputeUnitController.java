@@ -5,7 +5,6 @@ import org.cloudServices.global.db.Memdb;
 import org.cloudServices.infra.computeUnit.ComputeUnit;
 import org.cloudServices.infra.computeUnit.ComputeUnitCapacity;
 import org.cloudServices.infra.runtimes.DockerRuntime.DockerWorkload;
-import org.cloudServices.infra.runtimes.JSRuntime.JSFileWorkload;
 import org.cloudServices.infra.runtimes.JarRuntime.JarWorkload;
 import org.cloudServices.infra.runtimes.Workload;
 import picocli.CommandLine.Command;
@@ -352,19 +351,8 @@ public class ComputeUnitController implements Runnable {
             return new JarWorkload(jarPath, programArgs, List.of(), Map.of());
         }
 
-        if (typeOrPath.equalsIgnoreCase("js")) {
-            if (args.size() <= startIndex + 1) {
-                throw new IllegalArgumentException("Missing file path after 'js'");
-            }
-            return new JSFileWorkload(args.get(startIndex + 1));
-        }
-
         if (typeOrPath.equalsIgnoreCase("docker")) {
             return parseDockerWorkload(args, startIndex + 1);
-        }
-
-        if (typeOrPath.endsWith(".js")) {
-            return new JSFileWorkload(typeOrPath);
         }
 
         List<String> programArgs = new ArrayList<>(args.subList(startIndex + 1, args.size()));
@@ -452,9 +440,7 @@ public class ComputeUnitController implements Runnable {
         if (workload instanceof JarWorkload jar) {
             return "JAR: " + jar.jarPath();
         }
-        if (workload instanceof JSFileWorkload js) {
-            return "JS: " + js.filePath();
-        }
+
         if (workload instanceof DockerWorkload docker) {
             String image = docker.dockerImage()
                     + (docker.tag() == null || docker.tag().isBlank() ? "" : ":" + docker.tag());
