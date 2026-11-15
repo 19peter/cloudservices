@@ -169,6 +169,12 @@ public class ComputeUnitController implements Runnable {
             }
 
             try {
+                if (cu.getWorkload() instanceof DockerWorkload docker) {
+                    String image = docker.dockerImage()
+                            + (docker.tag() == null || docker.tag().isBlank() ? "" : ":" + docker.tag());
+                    respond(spec, "Starting Docker image " + image
+                            + "; Docker will download it if needed. Please wait...");
+                }
                 String pid = cu.executeWorkload();
                 respond(spec, "ComputeUnit " + unitId + " running with runtime ID: " + pid + " [State: " + cu.getState() + "]");
             } catch (Exception e) {

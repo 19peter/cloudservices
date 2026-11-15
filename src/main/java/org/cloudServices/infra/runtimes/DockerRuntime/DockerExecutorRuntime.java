@@ -375,7 +375,7 @@ public class DockerExecutorRuntime implements RuntimeInterface {
         }
 
         String imageReference = tag == null || tag.isBlank() ? image : image + ":" + tag;
-        List<String> command = new ArrayList<>(List.of("docker", "run", "--detach", "--rm", "--pull=never"));
+        List<String> command = new ArrayList<>(List.of("docker", "run", "--detach", "--rm", "--pull=missing"));
         if (containerName != null && !containerName.isBlank()) {
             command.add("--name");
             command.add(containerName);

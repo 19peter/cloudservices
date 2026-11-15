@@ -49,8 +49,7 @@ public class DaemonServer {
                         break;
                     }
                     if (!inputLine.isEmpty()) {
-                        String response = CommandDispatcher.dispatch(inputLine);
-                        out.println(response);
+                        CommandDispatcher.dispatch(inputLine, out);
                     }
                 }
             } catch (Exception e) {

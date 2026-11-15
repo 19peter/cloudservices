@@ -53,9 +53,9 @@ try {
     # Signal EOF for sending to receive full multi-line response
     $client.Client.Shutdown([System.Net.Sockets.SocketShutdown]::Send)
 
-    $response = $reader.ReadToEnd()
-    if (-not [string]::IsNullOrEmpty($response)) {
-        Write-Output $response.Trim()
+    while ($null -ne ($responseLine = $reader.ReadLine())) {
+        [Console]::Out.WriteLine($responseLine)
+        [Console]::Out.Flush()
     }
 
     $client.Close()

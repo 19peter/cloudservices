@@ -8,6 +8,7 @@ import picocli.CommandLine.Spec;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -31,19 +32,28 @@ public class CommandDispatcher {
     }
 
     public static String dispatch(String inputLine) {
+        StringWriter response = new StringWriter();
+        dispatch(inputLine, new PrintWriter(response));
+        return response.toString().stripTrailing();
+    }
+
+    public static void dispatch(String inputLine, PrintWriter output) {
+        TrackingWriter trackingWriter = new TrackingWriter(output);
+        PrintWriter writer = new PrintWriter(trackingWriter, true);
+
         final String[] parts;
         try {
             parts = tokenize(inputLine);
         } catch (IllegalArgumentException e) {
-            return "Invalid command line: " + e.getMessage();
+            writer.println("Invalid command line: " + e.getMessage());
+            return;
         }
 
         if (parts.length == 0 || !parts[0].equalsIgnoreCase("cld")) {
-            return "Invalid command format. Expected: cld <command> <action> [args]";
+            writer.println("Invalid command format. Expected: cld <command> <action> [args]");
+            return;
         }
 
-        StringWriter response = new StringWriter();
-        PrintWriter writer = new PrintWriter(response);
         CommandLine commandLine = new CommandLine(new RootCommand());
         commandLine.setOut(writer);
         commandLine.setErr(writer);
@@ -59,11 +69,10 @@ public class CommandDispatcher {
 
         int exitCode = commandLine.execute(Arrays.copyOfRange(parts, 1, parts.length));
         writer.flush();
-        String output = response.toString().stripTrailing();
-        if (!output.isEmpty()) {
-            return output;
+        if (!trackingWriter.hasWritten()) {
+            writer.println(exitCode == 0 ? "Success" : "Command failed");
         }
-        return exitCode == 0 ? "Success" : "Command failed";
+        writer.flush();
     }
 
     private static String[] tokenize(String inputLine) {
@@ -113,5 +122,37 @@ public class CommandDispatcher {
             arguments.add(argument.toString());
         }
         return arguments.toArray(new String[0]);
+    }
+
+    private static final class TrackingWriter extends Writer {
+        private final PrintWriter output;
+        private boolean written;
+
+        private TrackingWriter(PrintWriter output) {
+            this.output = output;
+        }
+
+        @Override
+        public void write(char[] characters, int offset, int length) {
+            if (length > 0) {
+                written = true;
+                output.write(characters, offset, length);
+                output.flush();
+            }
+        }
+
+        @Override
+        public void flush() {
+            output.flush();
+        }
+
+        @Override
+        public void close() {
+            flush();
+        }
+
+        private boolean hasWritten() {
+            return written;
+        }
     }
 }
