@@ -1,5 +1,6 @@
 package org.cloudServices.builder;
 
+import org.cloudServices.global.db.Memdb;
 import org.cloudServices.infra.computeUnit.ComputeUnit;
 import org.cloudServices.infra.computeUnit.ComputeUnitCapacity;
 import org.cloudServices.infra.runtimes.Workload;
@@ -25,6 +26,8 @@ public class ComputeUnitBuilder {
     }
 
     public ComputeUnit build() {
-        return new ComputeUnit(workload, name, capacity.getSlots());
+        ComputeUnit computeUnit = new ComputeUnit(workload, name, capacity.getSlots());
+        Memdb.register(computeUnit);
+        return computeUnit;
     }
 }

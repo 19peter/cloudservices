@@ -4,15 +4,13 @@ public enum Events {
     RUNTIME_CREATED,
 
     //COMPUTE UNIT EVENTS
-    COMPUTE_UNIT_CREATED,
     COMPUTE_UNIT_RESERVED,
     COMPUTE_UNIT_RUNNING,
-    COMPUTE_UNIT_RELEASED,
     COMPUTE_UNIT_KILLED,
 
-
-    //PORTS
-    PORT_ALLOCATED,
-    PORT_RELEASED,
+    //HEALTH EVENTS
+    //COMPUTE_UNIT_RUNNING units could be either Ready or not (Unhealthy)
+    READY,
+    UNHEALTHY,
 
 }

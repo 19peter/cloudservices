@@ -6,7 +6,6 @@ import org.cloudServices.infra.runtimes.RuntimeRegistry;
 import org.cloudServices.infra.runtimes.Workload;
 import org.cloudServices.shared.events.ServiceIdentity;
 import org.cloudServices.shared.events.ServiceStarted;
-import org.cloudServices.shared.enums.Events;
 import org.cloudServices.shared.interfaces.GatewayServerIntegration;
 import org.cloudServices.shared.runtime.RuntimeSubmission;
 
@@ -35,7 +34,6 @@ public class ComputeUnit implements GatewayServerIntegration {
         if (workload != null) {
             assignWorkload(workload);
         }
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_CREATED, this));
     }
 
     public void assignWorkload(Workload workload) {
@@ -46,7 +44,6 @@ public class ComputeUnit implements GatewayServerIntegration {
         this.runtimeInterface = RuntimeRegistry.createRuntime(workload);
         this.runtimeInterface.boot();
         this.state = ComputeUnitState.RESERVED;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RESERVED, serviceIdentity()));
     }
 
     public String executeWorkload() {
@@ -54,19 +51,20 @@ public class ComputeUnit implements GatewayServerIntegration {
         RuntimeSubmission submission = this.runtimeInterface.submit();
         this.runtimeInstanceId = submission.runtimeInstanceId();
         this.state = ComputeUnitState.RUNNING;
-        EventBus.publish(new EventBus.Event(
-                Events.COMPUTE_UNIT_RUNNING,
+        EventBus.publish(new EventBus.ServiceStartedEvent(
                 new ServiceStarted(serviceIdentity(), submission.endpoint())));
         return this.runtimeInstanceId;
     }
 
+    //Workload still attached but runtime is stopped
     public void terminateWorkload() {
         if (this.state != ComputeUnitState.RUNNING) throw new IllegalStateException("Compute unit is not running");
         this.runtimeInterface.stop();
         this.state = ComputeUnitState.RESERVED;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RESERVED, serviceIdentity()));
+        EventBus.publish(new EventBus.ServiceStoppedEvent(serviceIdentity()));
     }
 
+    //CU is detached from a Workload and a Runtime, can be reassigned again
     public void releaseWorkload() {
         if (this.state != ComputeUnitState.RESERVED && this.state != ComputeUnitState.AVAILABLE) throw new IllegalStateException("Compute unit is not reserved or available");
         if (this.runtimeInterface != null) {
@@ -75,7 +73,6 @@ public class ComputeUnit implements GatewayServerIntegration {
         this.workload = null;
         this.runtimeInterface = null;
         this.state = ComputeUnitState.AVAILABLE;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_RELEASED, serviceIdentity()));
     }
 
     public void killInstance() {
@@ -86,7 +83,7 @@ public class ComputeUnit implements GatewayServerIntegration {
             releaseWorkload();
         }
         this.state = ComputeUnitState.TERMINATED;
-        EventBus.publish(new EventBus.Event(Events.COMPUTE_UNIT_KILLED, this.id));
+        EventBus.publish(new EventBus.ServiceKilledEvent(serviceIdentity()));
     }
 
     public UUID getId() {

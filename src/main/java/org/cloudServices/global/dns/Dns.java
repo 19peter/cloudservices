@@ -6,7 +6,6 @@ import org.cloudServices.shared.events.ServiceStarted;
 import org.cloudServices.shared.runtime.ServiceEndpoint;
 
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Dns {
@@ -14,35 +13,27 @@ public class Dns {
 
     public static void init() {
         EventBus.subscribe(event -> {
-            switch (event.event()) {
-                case COMPUTE_UNIT_RUNNING -> {
-                    if (event.service() instanceof ServiceStarted started) {
-                        ServiceIdentity service = started.service();
-                        dnsRegistry.put(service.id(), started.endpoint());
-                        if (service.name() != null && !service.name().isBlank()) {
-                            dnsRegistry.put(service.name(), started.endpoint());
-                        }
+            switch (event) {
+                case EventBus.ServiceStartedEvent startedEvent -> {
+                    ServiceStarted started = startedEvent.started();
+                    ServiceIdentity service = started.service();
+                    dnsRegistry.put(service.id(), started.endpoint());
+                    if (service.name() != null && !service.name().isBlank()) {
+                        dnsRegistry.put(service.name(), started.endpoint());
                     }
                 }
-
-                case COMPUTE_UNIT_RESERVED, COMPUTE_UNIT_KILLED, COMPUTE_UNIT_RELEASED -> {
-                    if (event.service() instanceof ServiceIdentity service) {
-                        dnsRegistry.remove(service.id());
-                        if (service.name() != null && !service.name().isBlank()) {
-                            dnsRegistry.remove(service.name());
-                        }
-                    } else if (event.service() instanceof UUID uuid) {
-                        dnsRegistry.remove(uuid.toString());
-                    } else if (event.service() instanceof String id) {
-                        dnsRegistry.remove(id);
-                    }
-                }
-
-                default -> {
-                    // other events (RESERVED, RUNNING, STOPPED, etc.)
-                }
+                case EventBus.ServiceStoppedEvent stopped -> remove(stopped.identity());
+                case EventBus.ServiceKilledEvent killed -> remove(killed.identity());
+                default -> { }
             }
         });
+    }
+
+    private static void remove(ServiceIdentity service) {
+        dnsRegistry.remove(service.id());
+        if (service.name() != null && !service.name().isBlank()) {
+            dnsRegistry.remove(service.name());
+        }
     }
 
     public static ServiceEndpoint resolve(String idOrName) {

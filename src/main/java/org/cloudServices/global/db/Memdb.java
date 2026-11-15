@@ -2,10 +2,11 @@ package org.cloudServices.global.db;
 
 import org.cloudServices.global.eventbus.EventBus;
 import org.cloudServices.infra.computeUnit.ComputeUnit;
+import org.cloudServices.shared.events.ServiceIdentity;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Memdb {
@@ -13,33 +14,25 @@ public class Memdb {
 
     public static void init() {
         EventBus.subscribe(event -> {
-            switch (event.event()) {
-                case COMPUTE_UNIT_CREATED -> {
-                    if (event.service() instanceof ComputeUnit cu) {
-                        services.put(cu.getId().toString(), cu);
-                        if (cu.getName() != null && !cu.getName().isBlank()) {
-                            services.put(cu.getName(), cu);
-                        }
+            switch (event) {
+                case EventBus.ServiceKilledEvent killed -> {
+                    ServiceIdentity identity = killed.identity();
+                    services.remove(identity.id());
+                    if (identity.name() != null && !identity.name().isBlank()) {
+                        services.remove(identity.name());
                     }
                 }
-
-                case COMPUTE_UNIT_KILLED -> {
-                    if (event.service() instanceof ComputeUnit cu) {
-                        services.remove(cu.getId().toString());
-                        if (cu.getName() != null && !cu.getName().isBlank()) {
-                            services.remove(cu.getName());
-                        }
-                    } else if (event.service() instanceof UUID uuid) {
-                        services.remove(uuid.toString());
-                    } else if (event.service() instanceof String id) {
-                        services.remove(id);
-                    }
-                }
-                default -> {
-                    // other events (RESERVED, RUNNING, STOPPED, etc.)
-                }
+                default -> { }
             }
         });
+    }
+
+    public static void register(ComputeUnit computeUnit) {
+        Objects.requireNonNull(computeUnit, "computeUnit cannot be null");
+        services.put(computeUnit.getId().toString(), computeUnit);
+        if (computeUnit.getName() != null && !computeUnit.getName().isBlank()) {
+            services.put(computeUnit.getName(), computeUnit);
+        }
     }
 
     public static ComputeUnit getInstance(String idOrName) {
