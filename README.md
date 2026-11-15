@@ -125,8 +125,8 @@ All commands can be run via CMD (`cld ...`) or PowerShell (`.\cld ...`):
 | `cld --help` | None | Displays top-level CLI help. |
 | `cld cu --help` | None | Displays compute-unit commands and aliases. |
 | `cld cu list` | None | Lists each active compute unit once, including its name, state, PID, and workload. |
-| `cld cu create` | Optional: `--capacity <MICRO\|MEDIUM\|LARGE\|ULTRA>`, `--name <name>`, `[jar\|js] <path> [args...]` | Creates a new compute unit, optionally with a workload. Capacity defaults to `MICRO`. |
-| `cld cu assign` | `<unitId> [jar\|js] <path>` | Assigns a workload to an available unit and boots its runtime. |
+| `cld cu create` | Optional: `--capacity <MICRO\|MEDIUM\|LARGE\|ULTRA>`, `--name <name>`, `[jar\|js] <path> [args...]`, or `docker <image> port=<port> [name=<container>] [tag=<tag>] [env.<key>=<value>...]` | Creates a new compute unit, optionally with a workload. Capacity defaults to `MICRO`. |
+| `cld cu assign` | `<unitId> [jar\|js] <path>` or `<unitId> docker <image> port=<port> [name=<container>] [tag=<tag>] [env.<key>=<value>...]` | Assigns a workload to an available unit and boots its runtime. |
 | `cld cu run` | `<unitId>` | Submits and executes the workload, capturing the operating system PID. |
 | `cld cu execute` | `<unitId>` | Alias for `run`. |
 | `cld cu status` | `<unitId>` | Displays metadata including the allocated backend port when available. |

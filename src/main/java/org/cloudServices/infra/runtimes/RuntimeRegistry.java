@@ -1,5 +1,7 @@
 package org.cloudServices.infra.runtimes;
 
+import org.cloudServices.infra.runtimes.DockerRuntime.DockerExecutorRuntime;
+import org.cloudServices.infra.runtimes.DockerRuntime.DockerWorkload;
 import org.cloudServices.infra.runtimes.JarRuntime.JarExecutorRuntime;
 import org.cloudServices.infra.runtimes.JarRuntime.JarWorkload;
 
@@ -30,6 +32,7 @@ public class RuntimeRegistry {
      */
     private static void registerDefaults() {
         register(JarWorkload.class, JarExecutorRuntime::new);
+        register(DockerWorkload.class, DockerExecutorRuntime::new);
     }
 
     /**
@@ -43,18 +46,6 @@ public class RuntimeRegistry {
         Objects.requireNonNull(workloadType, "workloadType must not be null");
         Objects.requireNonNull(factory, "factory must not be null");
         factories.put(workloadType, factory);
-    }
-
-    /**
-     * Registers a supplier factory for a specific Workload type when workload instance data is not needed.
-     *
-     * @param workloadType the class type of the workload
-     * @param supplier     the runtime supplier
-     * @param <T>          the concrete workload type
-     */
-    public static <T extends Workload> void register(Class<T> workloadType, Supplier<RuntimeInterface> supplier) {
-        Objects.requireNonNull(supplier, "supplier must not be null");
-        register(workloadType, workload -> supplier.get());
     }
 
     /**

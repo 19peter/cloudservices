@@ -69,6 +69,9 @@ public class ComputeUnit implements GatewayServerIntegration {
 
     public void releaseWorkload() {
         if (this.state != ComputeUnitState.RESERVED && this.state != ComputeUnitState.AVAILABLE) throw new IllegalStateException("Compute unit is not reserved or available");
+        if (this.runtimeInterface != null) {
+            this.runtimeInterface.stop();
+        }
         this.workload = null;
         this.runtimeInterface = null;
         this.state = ComputeUnitState.AVAILABLE;

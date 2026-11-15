@@ -4,6 +4,7 @@ import org.cloudServices.builder.ComputeUnitBuilder;
 import org.cloudServices.global.db.Memdb;
 import org.cloudServices.infra.computeUnit.ComputeUnit;
 import org.cloudServices.infra.computeUnit.ComputeUnitCapacity;
+import org.cloudServices.infra.runtimes.DockerRuntime.DockerWorkload;
 import org.cloudServices.infra.runtimes.JSRuntime.JSFileWorkload;
 import org.cloudServices.infra.runtimes.JarRuntime.JarWorkload;
 import org.cloudServices.infra.runtimes.Workload;
@@ -14,6 +15,7 @@ import picocli.CommandLine.Spec;
 import picocli.CommandLine.Model.CommandSpec;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +61,11 @@ public class ComputeUnitController implements Runnable {
         )
         private ComputeUnitCapacity capacity;
 
-        @Parameters(arity = "0..*", paramLabel = "ARGS", description = "Optional name, workload, and workload arguments.")
+        @Parameters(
+                arity = "0..*",
+                paramLabel = "ARGS",
+                description = "Optional name, workload, and workload arguments. Docker: docker <image> port=<port> [name=<container>] [tag=<tag>] [env.<key>=<value>...]"
+        )
         private List<String> args = new ArrayList<>();
 
         @Spec
@@ -108,7 +114,11 @@ public class ComputeUnitController implements Runnable {
             mixinStandardHelpOptions = true
     )
     public static class AssignCommand implements Runnable {
-        @Parameters(arity = "1..*", paramLabel = "ARGS", description = "<unitId> [jar|js] <filePath> [args...]")
+        @Parameters(
+                arity = "1..*",
+                paramLabel = "ARGS",
+                description = "<unitId> [jar|js] <filePath> [args...] | <unitId> docker <image> port=<port> [name=<container>] [tag=<tag>] [env.<key>=<value>...]"
+        )
         private List<String> args = new ArrayList<>();
 
         @Spec
@@ -349,6 +359,10 @@ public class ComputeUnitController implements Runnable {
             return new JSFileWorkload(args.get(startIndex + 1));
         }
 
+        if (typeOrPath.equalsIgnoreCase("docker")) {
+            return parseDockerWorkload(args, startIndex + 1);
+        }
+
         if (typeOrPath.endsWith(".js")) {
             return new JSFileWorkload(typeOrPath);
         }
@@ -357,9 +371,76 @@ public class ComputeUnitController implements Runnable {
         return new JarWorkload(typeOrPath, programArgs, List.of(), Map.of());
     }
 
+    private static DockerWorkload parseDockerWorkload(List<String> args, int startIndex) {
+        if (args.size() <= startIndex) {
+            throw new IllegalArgumentException("Missing Docker image after 'docker'");
+        }
+
+        String image = args.get(startIndex);
+        String containerName = null;
+        String tag = null;
+        Integer port = null;
+        HashMap<String, String> envVars = new HashMap<>();
+        for (int i = startIndex + 1; i < args.size(); i++) {
+            String setting = args.get(i);
+            int separator = setting.indexOf('=');
+            if (separator <= 0) {
+                throw new IllegalArgumentException("Invalid Docker setting '" + setting
+                        + "'. Expected port=<port>, name=<container>, tag=<tag>, or env.<key>=<value>");
+            }
+
+            String key = setting.substring(0, separator);
+            String value = setting.substring(separator + 1);
+            if (value.isBlank() && !key.startsWith("env.")) {
+                throw new IllegalArgumentException("Docker setting '" + key + "' cannot be blank");
+            }
+
+            switch (key) {
+                case "port" -> {
+                    if (port != null) {
+                        throw new IllegalArgumentException("Docker port may only be specified once");
+                    }
+                    try {
+                        port = Integer.valueOf(value);
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("Invalid Docker port: " + value, e);
+                    }
+                }
+                case "name" -> {
+                    if (containerName != null) {
+                        throw new IllegalArgumentException("Docker container name may only be specified once");
+                    }
+                    containerName = value;
+                }
+                case "tag" -> {
+                    if (tag != null) {
+                        throw new IllegalArgumentException("Docker image tag may only be specified once");
+                    }
+                    tag = value;
+                }
+                default -> {
+                    if (!key.startsWith("env.") || key.length() == "env.".length()) {
+                        throw new IllegalArgumentException("Unknown Docker setting: " + key);
+                    }
+                    String envKey = key.substring("env.".length());
+                    if (envVars.putIfAbsent(envKey, value) != null) {
+                        throw new IllegalArgumentException("Docker environment variable may only be specified once: "
+                                + envKey);
+                    }
+                }
+            }
+        }
+
+        if (port == null) {
+            throw new IllegalArgumentException("Missing required Docker setting: port=<port>");
+        }
+        return new DockerWorkload(image, containerName, tag, port, envVars);
+    }
+
     private static boolean isWorkloadSpec(String value) {
         return value.equalsIgnoreCase("jar")
                 || value.equalsIgnoreCase("js")
+                || value.equalsIgnoreCase("docker")
                 || value.endsWith(".jar")
                 || value.endsWith(".js");
     }
@@ -373,6 +454,11 @@ public class ComputeUnitController implements Runnable {
         }
         if (workload instanceof JSFileWorkload js) {
             return "JS: " + js.filePath();
+        }
+        if (workload instanceof DockerWorkload docker) {
+            String image = docker.dockerImage()
+                    + (docker.tag() == null || docker.tag().isBlank() ? "" : ":" + docker.tag());
+            return "Docker: " + image + " (port " + docker.port() + ")";
         }
         return workload.getClass().getSimpleName();
     }
